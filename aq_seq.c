@@ -1,96 +1,116 @@
 /**
  * @file   aq_seq.c
- * @Author Your group number
+ * @Author Your group info
  * @date   October, 2024
  * @brief  Sequential alarm queue implementation
  */
 
-#include <stdlib.h>
-#include <stdio.h>
 #include "aq.h"
+#include <stdlib.h>
 
-#define MAX_NORMAL_MESSAGES 1000
+// Node structure for the linked list of normal messages
+typedef struct Node {
+    void *msg;
+    struct Node *next;
+} Node;
 
+// Main queue structure
 typedef struct {
-    void* normal_messages[MAX_NORMAL_MESSAGES];
-    int normal_count;
-    void* alarm_message;
-    int has_alarm;
-} Queue;
+    Node *head;           // Head of normal messages list
+    Node *tail;           // Tail for O(1) insertion
+    void *alarm_msg;      // Single alarm message slot
+    int normal_count;     // Count of normal messages
+    int has_alarm;        // Boolean flag for alarm message
+} AQStruct;
 
 AlarmQueue aq_create() {
-    Queue* q = (Queue*)malloc(sizeof(Queue));
-    if (q == NULL) return NULL;
+    AQStruct *aq = (AQStruct *)malloc(sizeof(AQStruct));
+    if (!aq) return NULL;
     
-    q->normal_count = 0;
-    q->alarm_message = NULL;
-    q->has_alarm = 0;
+    aq->head = NULL;
+    aq->tail = NULL;
+    aq->alarm_msg = NULL;
+    aq->normal_count = 0;
+    aq->has_alarm = 0;
     
-    return q;
+    return (AlarmQueue)aq;
 }
 
-int aq_send(AlarmQueue aq, void* msg, MsgKind k) {
-    Queue* q = (Queue*)aq;
-    if (q == NULL) return AQ_UNINIT;
-    if (msg == NULL) return AQ_NULL_MSG;
+int aq_send(AlarmQueue aq, void *msg, MsgKind k) {
+    if (!aq) return AQ_UNINIT;
+    if (!msg) return AQ_NULL_MSG;
+    
+    AQStruct *queue = (AQStruct *)aq;
     
     if (k == AQ_ALARM) {
-        if (q->has_alarm) return AQ_NO_ROOM;
-        q->alarm_message = msg;
-        q->has_alarm = 1;
+        // Check if there's already an alarm message
+        if (queue->has_alarm) {
+            return AQ_NO_ROOM;
+        }
+        queue->alarm_msg = msg;
+        queue->has_alarm = 1;
     } else {
-        // Normal message
-        if (q->normal_count >= MAX_NORMAL_MESSAGES) return AQ_NO_ROOM;
-        // Add to end of array
-        q->normal_messages[q->normal_count] = msg;
-        q->normal_count++;
+        // Create new node for normal message
+        Node *new_node = (Node *)malloc(sizeof(Node));
+        if (!new_node) return AQ_NO_ROOM;
+        
+        new_node->msg = msg;
+        new_node->next = NULL;
+        
+        // Add to tail of normal messages list
+        if (!queue->head) {
+            queue->head = new_node;
+        } else {
+            queue->tail->next = new_node;
+        }
+        queue->tail = new_node;
+        queue->normal_count++;
     }
     
     return 0;
 }
 
-int aq_recv(AlarmQueue aq, void** msg) {
-    Queue* q = (Queue*)aq;
-    if (q == NULL) return AQ_UNINIT;
-    if (msg == NULL) return AQ_NULL_MSG;
+int aq_recv(AlarmQueue aq, void **msg) {
+    if (!aq) return AQ_UNINIT;
+    if (!msg) return AQ_NULL_MSG;
+    
+    AQStruct *queue = (AQStruct *)aq;
     
     // Check if there are any messages
-    if (q->has_alarm == 0 && q->normal_count == 0) {
+    if (!queue->has_alarm && !queue->head) {
         *msg = NULL;
         return AQ_NO_MSG;
     }
     
-    // Priority to alarm messages
-    if (q->has_alarm) {
-        *msg = q->alarm_message;
-        q->alarm_message = NULL;
-        q->has_alarm = 0;
+    // Priority to alarm message
+    if (queue->has_alarm) {
+        *msg = queue->alarm_msg;
+        queue->alarm_msg = NULL;
+        queue->has_alarm = 0;
         return AQ_ALARM;
     }
     
-    // Get first normal message
-    if (q->normal_count > 0) {
-        *msg = q->normal_messages[0];
-        // Shift remaining messages left
-        for (int i = 1; i < q->normal_count; i++) {
-            q->normal_messages[i-1] = q->normal_messages[i];
-        }
-        q->normal_count--;
-        return AQ_NORMAL;
+    // Get normal message from head of queue
+    Node *node = queue->head;
+    *msg = node->msg;
+    queue->head = node->next;
+    if (!queue->head) {
+        queue->tail = NULL;
     }
+    queue->normal_count--;
+    free(node);
     
-    *msg = NULL;
-    return AQ_NO_MSG;
+    return AQ_NORMAL;
 }
 
 int aq_size(AlarmQueue aq) {
-    Queue* q = (Queue*)aq;
-    if (q == NULL) return 0;
-    return q->normal_count + q->has_alarm;
+    if (!aq) return 0;
+    AQStruct *queue = (AQStruct *)aq;
+    return queue->normal_count + queue->has_alarm;
 }
 
 int aq_alarms(AlarmQueue aq) {
-    Queue* q = (Queue*)aq;
-    if (q == NULL) return 0;
-    return q->has_alarm;
+    if (!aq) return 0;
+    AQStruct *queue = (AQStruct *)aq;
+    return queue->has_alarm;
 }

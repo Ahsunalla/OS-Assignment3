@@ -1,12 +1,8 @@
-
 #include <stdlib.h>
 #include <stdio.h>
-
 #include <assert.h>
-
 #include "aq.h"
-
-#include "aux.h"
+#include "_aux.h"
 
 /** 
  * Sequential program that sends and receives a few integer messages 
@@ -18,7 +14,6 @@
  */
 
 int main(int argc, char ** argv) {
-
   AlarmQueue q = aq_create();
   if (q == NULL) {
     printf("Alarm queue could not be created\n");

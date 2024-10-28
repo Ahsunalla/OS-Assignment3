@@ -17,10 +17,10 @@ LIB_SEQ_OBJECTS = $(LIB_SEQ_SOURCES:.c=.o)
 LIB_SEQ         = aq_seq
 LIB_SEQ_NAME    = lib$(LIB_SEQ).a
 
-DEMO_SOURCES = aq_demo.c aux.c
+DEMO_SOURCES = aq_demo.c _aux.c
 DEMO_OBJECTS = $(DEMO_SOURCES:.c=.o)
 
-TEST_SOURCES = aq_test.c aux.c
+TEST_SOURCES = aq_test.c _aux.c
 TEST_OBJECTS = $(TEST_SOURCES:.c=.o)
 
 DEMO_EXECUTABLE = demo_aq
@@ -62,4 +62,3 @@ clean:
 
 clean-all: clean
 	rm -rf $(LIB_DIR) $(EXECUTABLES)
-
