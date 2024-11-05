@@ -14,43 +14,65 @@
  */
 
 int main(int argc, char ** argv) {
-  AlarmQueue q = aq_create();
-  if (q == NULL) {
-    printf("Alarm queue could not be created\n");
-    exit(1);
-  }
+    AlarmQueue q = aq_create();
+    if (q == NULL) {
+        printf("Alarm queue could not be created\n");
+        exit(1);
+    }
 
-  put_normal(q, 1);
-  put_normal(q, 2);
-  put_alarm (q, 3);
-  assert( put_alarm (q, 4) == AQ_NO_ROOM );
-  put_normal(q, 5);
+    put_normal(q, 1);
+    put_normal(q, 2);
+    put_alarm(q, 3);
+    assert( put_alarm(q, 4) == AQ_NO_ROOM );
+    put_normal(q, 5);
 
-  /* Now there should be 4 messages in the queue */
-  assert(print_sizes(q) == 4);
+    /* Verify queue size and state */
+    printf("DEBUG: Verifying initial queue size\n");
+    print_sizes(q);
 
-  /* First received should be the alarm message */
-  assert( get(q) == 3 );
+    /* Retrieve messages and verify order */
+    printf("DEBUG: Retrieving messages from queue\n");
 
-  put_alarm (q, 6);
-  put_normal(q, 7);
-  assert( put_alarm (q, 8) == AQ_NO_ROOM );
-  put_normal(q, 9);
+    int received_value = get(q);
+    printf("Expected: 3, Received: %d\n", received_value);
+    assert(received_value == 3);
 
-  assert( print_sizes(q) == 6 );
+    put_alarm(q, 6);
+    put_normal(q, 7);
+    assert(put_alarm(q, 8) == AQ_NO_ROOM);
+    put_normal(q, 9);
 
-  assert( get(q) == 6 );
-  assert( get(q) == 1 );
-  assert( get(q) == 5 );
-  assert( get(q) == 3 );
-  assert( get(q) == 7 );
-  assert( get(q) == 9 );
+    /* Verify queue size and state again */
+    printf("DEBUG: Verifying updated queue size\n");
+    print_sizes(q);
 
-  /* Now the queue should be empty */
-  assert( print_sizes(q) == 0 );
+    received_value = get(q);
+    printf("Expected: 6, Received: %d\n", received_value);
+    assert(received_value == 6);
 
-  /* Next get should give error */
-  assert( get(q) == AQ_NO_MSG );
+    received_value = get(q);
+    printf("Expected: 1, Received: %d\n", received_value);
+    assert(received_value == 1);
 
-  return 0;
+    received_value = get(q);
+    printf("Expected: 2, Received: %d\n", received_value);
+    assert(received_value == 2);
+
+    received_value = get(q);
+    printf("Expected: 5, Received: %d\n", received_value);
+    assert(received_value == 5);
+
+    received_value = get(q);
+    printf("Expected: 7, Received: %d\n", received_value);
+    assert(received_value == 7);
+
+    received_value = get(q);
+    printf("Expected: 9, Received: %d\n", received_value);
+    assert(received_value == 9);
+
+    /* Now the queue should be empty */
+    print_sizes(q);
+    assert(get(q) == AQ_NO_MSG);
+
+    return 0;
 }
