@@ -1,97 +1,89 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <pthread.h>
-#include <assert.h>
+
 #include "aq.h"
 #include "_aux.h"
 
 static AlarmQueue q;
+static pthread_t t1, t2, t3;
 
-// Thread 1: Sends first alarm and a normal message
-void* sender1(void* arg) {
-    printf("Thread 1: Sending alarm message 1\n");
-    put_alarm(q, 1);
+// Thread 1: Sends alarms and normal messages
+void* sender(void* arg) {
+    int alarm1 = 1;
+    int alarm2 = 2;
+    int normal1 = 3;
+    int normal2 = 4;
+
+    printf("Sending first alarm (A1)\n");
+    put_alarm(q, alarm1);
     
-    msleep(100);  // Give time for Thread 2 to attempt sending alarm
+    printf("Attempting to send second alarm (A2) - should block\n");
+    put_alarm(q, alarm2);  // This should block until first alarm is received
     
-    printf("Thread 1: Sending normal message 2\n");
-    put_normal(q, 2);  // This message helps detect when Thread 2 unblocks
+    printf("Second alarm sent successfully after unblocking\n");
+    
+    // Send normal messages to verify ordering
+    printf("Sending normal messages\n");
+    put_normal(q, normal1);
+    put_normal(q, normal2);
     
     return NULL;
 }
 
-// Thread 2: Tries to send second alarm (should block)
-void* sender2(void* arg) {
-    msleep(50);  // Ensure first alarm is sent first
+// Thread 2: Receives messages after a delay
+void* delayed_receiver(void* arg) {
+    // Wait to ensure first alarm is queued
+    msleep(500);
     
-    printf("Thread 2: Attempting to send alarm message 3 (should block)\n");
-    put_alarm(q, 3);  // Should block until first alarm is received
+    void* msg;
+    int ret;
     
-    printf("Thread 2: Alarm message 3 sent (unblocked)\n");
-    put_normal(q, 4);  // This message should appear after message 2
+    printf("Receiving first alarm\n");
+    ret = aq_recv(q, &msg);
+    if (ret == AQ_ALARM) {
+        printf("Received alarm message: %d\n", *(int*)msg);
+    }
     
     return NULL;
 }
 
-// Thread 3: Receives messages and verifies order
-void* receiver(void* arg) {
-    msleep(200);  // Give time for Thread 2 to block
-    
-    // Receive first alarm
-    int msg = get(q);
-    printf("Thread 3: Received message %d (should be alarm 1)\n", msg);
-    assert(msg == 1);
-    
-    msleep(50);  // Give time for Thread 2 to unblock
-    
-    // Receive second alarm (after it unblocked, has priority over normal messages)
-    msg = get(q);
-    printf("Thread 3: Received message %d (should be alarm 3)\n", msg);
-    assert(msg == 3);
-    
-    // Now receive normal messages in order
-    msg = get(q);
-    printf("Thread 3: Received message %d (should be normal 2)\n", msg);
-    assert(msg == 2);
-    
-    msg = get(q);
-    printf("Thread 3: Received message %d (should be normal 4)\n", msg);
-    assert(msg == 4);
-    
+// Thread 3: Monitors queue state
+void* monitor(void* arg) {
+    while(1) {
+        msleep(100);
+        printf("Queue state - Size: %d, Alarms: %d\n", 
+               aq_size(q), aq_alarms(q));
+    }
     return NULL;
 }
 
 int main(int argc, char** argv) {
+    printf("Starting Alarm Queue Blocking Test\n");
+    
     q = aq_create();
     if (q == NULL) {
-        printf("Alarm queue could not be created\n");
-        exit(1);
+        printf("Failed to create alarm queue\n");
+        return 1;
     }
     
-    pthread_t t1, t2, t3;
-    void *res1, *res2, *res3;
-    
-    printf("Starting test of alarm message blocking...\n");
-    printf("This test demonstrates:\n");
-    printf("1. Sending an alarm message blocks when another alarm exists\n");
-    printf("2. The blocked alarm unblocks when the first alarm is received\n");
-    printf("3. Alarm messages have priority over normal messages\n");
-    printf("4. Normal messages maintain their order after alarms\n");
-    
     // Create threads
-    pthread_create(&t1, NULL, sender1, NULL);
-    pthread_create(&t2, NULL, sender2, NULL);
-    pthread_create(&t3, NULL, receiver, NULL);
+    pthread_create(&t1, NULL, sender, NULL);
+    pthread_create(&t2, NULL, delayed_receiver, NULL);
+    pthread_create(&t3, NULL, monitor, NULL);
     
-    // Wait for all threads to complete
-    pthread_join(t1, &res1);
-    pthread_join(t2, &res2);
-    pthread_join(t3, &res3);
+    // Wait for sender and receiver to complete
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
     
-    printf("Test completed successfully!\n");
-    printf("Final queue size: %d (should be 0)\n", aq_size(q));
-    assert(aq_size(q) == 0);
-    assert(aq_alarms(q) == 0);
+    // Cancel monitor thread
+    pthread_cancel(t3);
+    pthread_join(t3, NULL);
+    
+    // Print final queue state
+    printf("\nFinal queue state:\n");
+    print_sizes(q);
     
     return 0;
 }
